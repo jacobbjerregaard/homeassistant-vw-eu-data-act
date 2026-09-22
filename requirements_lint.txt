@@ -1,0 +1,4 @@
+# Lint / type-check tooling. Kept separate from the test requirements so the
+# large, HA-pinned test dependency tree isn't entangled with the linters.
+ruff>=0.15
+mypy>=1.11

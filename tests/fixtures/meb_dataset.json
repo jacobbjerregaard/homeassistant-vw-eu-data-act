@@ -1,0 +1,21 @@
+{
+  "vin": "WVWZZZE1ZTEST0001",
+  "user_id": "00000000-0000-0000-0000-000000000000",
+  "Data": [
+    {"key": "00000000-0000-3000-8000-000000000001", "dataFieldName": "battery_state_report.soc", "value": "50"},
+    {"key": "506cb83e-f99f-3af3-bbeb-0429b69a78d9", "dataFieldName": "battery_state_report.soc", "value": "72"},
+    {"key": "b3b04f31-b10e-38aa-b8ad-c0da7c06caea", "dataFieldName": "settings.target_soc", "value": "80"},
+    {"key": "c8cb205f-01c6-3c81-bda1-059b99ae6515", "dataFieldName": "battery_state_report.charge_power", "value": "9.899994"},
+    {"key": "7405c11f-4d20-36d2-8381-18364aa1f444", "dataFieldName": "battery_state_report.remaining_charging_time_complete", "value": "2400s"},
+    {"key": "a08cca2b-ed42-37bc-b160-d015ce205d3d", "dataFieldName": "charging_state_report.current_charge_state", "value": "CHARGE_STATE_CHARGING"},
+    {"key": "75d65f00-5fa8-334a-826d-e73e91fe5c8d", "dataFieldName": "mileage.value", "value": "10256"},
+    {"key": "30cc36fd-71ca-3c09-9296-e94ebd47bd2b", "dataFieldName": "mileage.value", "value": "10256"},
+    {"key": "00000000-0000-3000-8000-000000000007", "dataFieldName": "mileage.unit", "value": "KM"},
+    {"key": "b6ea5ae8-53ff-386d-8415-1baa0602bbb6", "dataFieldName": "outdoor_temperature", "value": "26.5"},
+    {"key": "00000000-0000-3000-8000-000000000009", "dataFieldName": "locked", "value": "true"},
+    {"key": "00000000-0000-3000-8000-000000000010", "dataFieldName": "car_captured_time", "value": "2026-09-20T10:00:00Z"},
+    {"key": "00000000-0000-3000-8000-000000000011", "dataFieldName": "car_captured_time", "value": "2026-09-20T10:05:30Z"},
+    {"key": "00000000-0000-3000-8000-000000000012", "dataFieldName": "timestamp", "value": "1789898730000"},
+    {"key": "00000000-0000-3000-8000-000000000013", "dataFieldName": "charging_state_report.charge_mode"}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "entity": {
+    "sensor": {
+      "target_battery_level": { "default": "mdi:battery-charging-80" },
+      "charging_state": { "default": "mdi:ev-station" },
+      "plug_state": { "default": "mdi:power-plug" },
+      "odometer": { "default": "mdi:counter" },
+      "range": { "default": "mdi:map-marker-distance" },
+      "fuel_level": { "default": "mdi:gas-station" },
+      "last_seen": { "default": "mdi:car-clock" },
+      "dataset_created": { "default": "mdi:database-clock" }
+    }
+  }
+}

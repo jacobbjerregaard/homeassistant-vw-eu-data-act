@@ -1,0 +1,4 @@
+# Home Assistant integration tests (tests/integration).
+# pytest-homeassistant-custom-component pins a matching Home Assistant + pytest.
+-r requirements_test.txt
+pytest-homeassistant-custom-component

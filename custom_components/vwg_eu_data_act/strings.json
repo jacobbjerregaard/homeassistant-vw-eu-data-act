@@ -1,0 +1,96 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to the EU Data Act portal",
+        "description": "Use the same brand account you sign in to eu-data-act.drivesomethinggreater.com with. A continuous data request must already be set up for the vehicle on the portal.",
+        "data": {
+          "brand": "Brand",
+          "email": "E-mail",
+          "password": "Password"
+        },
+        "data_description": {
+          "brand": "The brand whose account the vehicle is linked to."
+        }
+      },
+      "vehicle": {
+        "title": "Choose a vehicle",
+        "data": {
+          "vin": "Vehicle"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in again",
+        "description": "The portal no longer accepts the password for {email}.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The e-mail or password was rejected.",
+      "cannot_connect": "Could not reach the EU Data Act portal. It may be temporarily down; try again later.",
+      "no_data_request": "This vehicle has no continuous data request. Set one up under Data clusters on the portal, then try again.",
+      "action_required": "Your account needs attention before it can be used, for example new terms of use to accept. Sign in once at eu-data-act.drivesomethinggreater.com in a browser, then try again."
+    },
+    "abort": {
+      "already_configured": "This vehicle is already configured.",
+      "no_vehicles": "No vehicles are linked to this account on the EU Data Act portal.",
+      "reauth_successful": "Signed in again."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_level": {
+        "name": "Battery level"
+      },
+      "target_battery_level": {
+        "name": "Target battery level"
+      },
+      "charging_power": {
+        "name": "Charging power"
+      },
+      "charging_time_remaining": {
+        "name": "Charging time remaining"
+      },
+      "charging_state": {
+        "name": "Charging state"
+      },
+      "plug_state": {
+        "name": "Plug state"
+      },
+      "odometer": {
+        "name": "Odometer"
+      },
+      "range": {
+        "name": "Range"
+      },
+      "fuel_level": {
+        "name": "Fuel level"
+      },
+      "outside_temperature": {
+        "name": "Outside temperature"
+      },
+      "last_seen": {
+        "name": "Last reported"
+      },
+      "dataset_created": {
+        "name": "Dataset delivered"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "The EU Data Act portal rejected the credentials."
+    },
+    "no_data": {
+      "message": "The EU Data Act portal has no data for this vehicle yet. Check that a continuous data request is active."
+    },
+    "update_failed": {
+      "message": "Could not fetch data from the EU Data Act portal: {error}"
+    },
+    "action_required": {
+      "message": "The EU Data Act portal needs you to sign in once in a browser, for example to accept new terms of use."
+    }
+  }
+}

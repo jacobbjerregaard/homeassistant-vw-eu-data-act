@@ -1,0 +1,20 @@
+{
+  "domain": "vwg_eu_data_act",
+  "name": "VW Group EU Data Act",
+  "codeowners": [
+    "@jacobbjerregaard"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "diagnostics"
+  ],
+  "documentation": "https://github.com/jacobbjerregaard/homeassistant-vw-eu-data-act",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/jacobbjerregaard/homeassistant-vw-eu-data-act/issues",
+  "loggers": [
+    "custom_components.vwg_eu_data_act"
+  ],
+  "requirements": [],
+  "version": "0.1.0"
+}

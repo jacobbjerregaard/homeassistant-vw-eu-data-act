@@ -1,0 +1,14 @@
+{
+  "vin": "WVWZZZAUZTEST0002",
+  "user_id": "00000000-0000-0000-0000-000000000000",
+  "Data": [
+    {"key": "ae0294b4-1286-3e98-a818-1485b8d88430", "dataFieldName": "state_of_charge", "value": "25", "timestampUtc": "2026-09-20T09:40:28.000Z"},
+    {"key": "41c0805c-43e5-313e-9dfb-356cb8d20f7c", "dataFieldName": "mileage", "value": "40208", "timestampUtc": "2026-09-20T09:40:28.000Z"},
+    {"key": "153e8c40-4c6c-3c17-a11b-0ecc35d55b81", "dataFieldName": "cruising_range_combined", "value": null, "timestampUtc": "2026-09-20T09:40:28.000Z"},
+    {"key": "1503760b-5570-3001-8ffc-1bb6f464948e", "dataFieldName": "fuel_level_current_level", "value": "37", "timestampUtc": "2026-09-20T09:40:28.000Z"},
+    {"key": "6810b781-e54a-35e8-af98-fcdefb54bac6", "dataFieldName": "outside_temperature", "value": "2931", "timestampUtc": "2026-09-20T09:39:34.000Z"},
+    {"key": "c111830c-f959-30d2-859a-ea996190d864", "dataFieldName": "plug_state", "value": "disconnected", "timestampUtc": "2026-09-20T09:39:34.000Z"},
+    {"key": "9da735bb-c5d5-39f8-bf53-0fa2a367aa8f", "dataFieldName": "charging_state", "value": "off", "timestampUtc": "2026-09-20T09:39:34.000Z"},
+    {"key": "cf28f7d9-6201-30b8-82e5-a461968d30dc", "dataFieldName": "remaining_charging_time", "value": "95", "timestampUtc": "2026-09-20T09:39:34.000Z"}
+  ]
+}

@@ -1,0 +1,47 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Ruff (lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: "actions/checkout@v5"
+      - uses: "actions/setup-python@v6"
+        with:
+          python-version: "3.13"
+      - name: Install ruff
+        run: pip install -r requirements_lint.txt
+      - name: Run ruff
+        run: ruff check --output-format=github .
+      - name: Check formatting
+        # E501 is enforced, so the formatter has to be enforced with it -
+        # otherwise line length drifts back out on the next hand-edit.
+        run: ruff format --check .
+
+  mypy:
+    name: Type check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: "actions/checkout@v5"
+      - uses: "actions/setup-python@v6"
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        # HA + aiohttp are needed so mypy can resolve the imported types.
+        run: pip install -r requirements_test_ha.txt -r requirements_lint.txt
+      - name: Run mypy
+        # Targets come from the files allowlist in pyproject.toml.
+        run: mypy

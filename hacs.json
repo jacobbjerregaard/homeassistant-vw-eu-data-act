@@ -1,0 +1,6 @@
+{
+  "name": "VW Group EU Data Act",
+  "render_readme": true,
+  "zip_release": false,
+  "homeassistant": "2025.3.0"
+}
