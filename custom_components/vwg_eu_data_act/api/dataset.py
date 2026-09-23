@@ -40,6 +40,9 @@ _INT_RE = re.compile(r"^-?\d+$")
 _FLOAT_RE = re.compile(r"^-?\d+\.\d+$")
 _DURATION_RE = re.compile(r"^(-?\d+(?:\.\d+)?)s$")
 _FILENAME_TS_RE = re.compile(r"^\d{14}$")
+#: Fractions of a second beyond microseconds, which one-off exports contain
+#: ("…:38.052418548Z") and older Pythons refuse to parse.
+_EXTRA_DIGITS_RE = re.compile(r"(\.\d{6})\d+")
 
 type Value = str | int | float | bool | None
 
@@ -78,8 +81,9 @@ def parse_timestamp(raw: str | None) -> datetime | None:
             return datetime.fromtimestamp(int(text) / 1000, tz=UTC)
         except (OverflowError, OSError, ValueError):
             return None
+    text = _EXTRA_DIGITS_RE.sub(r"\1", text.replace("Z", "+00:00"))
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
@@ -126,12 +130,16 @@ class Dataset:
             key = item.get("key")
             if not key:
                 continue
-            points[key] = DataPoint(
+            point = DataPoint(
                 key=key,
                 name=item.get("dataFieldName") or key,
                 raw="" if item.get("value") is None else str(item["value"]),
                 timestamp=parse_timestamp(item.get("timestampUtc")),
             )
+            # A one-off export holds a history, many readings per key in no
+            # particular order; keep the newest, by the same rule as merging.
+            if _supersedes(point, points.get(key)):
+                points[key] = point
         return cls(vin=str(payload.get("vin") or ""), points=points)
 
     def merged_with(self, newer: Dataset) -> Dataset:
@@ -143,17 +151,8 @@ class Dataset:
         """
         points = dict(self.points)
         for key, point in newer.points.items():
-            previous = points.get(key)
-            if previous is not None:
-                if point.value is None and previous.value is not None:
-                    continue
-                if (
-                    point.timestamp is not None
-                    and previous.timestamp is not None
-                    and point.timestamp < previous.timestamp
-                ):
-                    continue
-            points[key] = point
+            if _supersedes(point, points.get(key)):
+                points[key] = point
         return Dataset(vin=newer.vin or self.vin, points=points)
 
     @cached_property
@@ -199,6 +198,23 @@ class Dataset:
             point.timestamp for point in self.points.values() if point.timestamp
         )
         return max(stamps, default=None)
+
+
+def _supersedes(point: DataPoint, previous: DataPoint | None) -> bool:
+    """Whether ``point``, received later, should replace ``previous``.
+
+    It should, unless it has no value while ``previous`` has one, or its own
+    timestamp says it was measured before ``previous``.
+    """
+    if previous is None:
+        return True
+    if point.value is None and previous.value is not None:
+        return False
+    return (
+        point.timestamp is None
+        or previous.timestamp is None
+        or point.timestamp >= previous.timestamp
+    )
 
 
 @dataclass(frozen=True, slots=True)

@@ -41,6 +41,7 @@ def test_parse_timestamp_formats():
     assert parse_timestamp("2026-09-20T10:05:30.000Z") == expected
     assert parse_timestamp("1789898730000") == expected
     assert parse_timestamp("not a time") is None
+    assert parse_timestamp("N/A") is None
     assert parse_timestamp("") is None
 
 
@@ -184,3 +185,27 @@ def test_captured_at_of_merged_state_is_the_newest():
     assert merged.captured_at == datetime(2026, 9, 20, 11, 30, tzinfo=UTC)
     assert merged.value("battery_state_report.soc", SOC_KEY) == 72
     assert merged.value("battery_level_HV.value") == 67.0
+
+
+def test_timestamp_formats_of_one_off_exports():
+    # Nanoseconds, a space instead of the T, and a local offset.
+    assert parse_timestamp("2026-09-22T19:03:38.052418548Z") == datetime(
+        2026, 9, 22, 19, 3, 38, 52418, tzinfo=UTC
+    )
+    assert parse_timestamp("2026-09-13 13:52:26") == datetime(
+        2026, 9, 13, 13, 52, 26, tzinfo=UTC
+    )
+    assert parse_timestamp("2026-09-22T20:49:29.000+02:00") == datetime(
+        2026, 9, 22, 18, 49, 29, tzinfo=UTC
+    )
+
+
+def test_history_in_one_document_keeps_the_newest_reading():
+    """A one-off export lists many readings per key, not in time order."""
+    dataset = _points(
+        ("soc", "70", {"timestampUtc": "2026-09-20T05:00:00Z"}),
+        ("soc", "78", {"timestampUtc": "2026-09-22T05:03:21Z"}),
+        ("soc", "50", {"timestampUtc": "2026-09-18T19:57:32Z"}),
+        ("soc", None, {"timestampUtc": "2026-09-23T00:00:00Z"}),
+    )
+    assert dataset.value("soc") == 78
