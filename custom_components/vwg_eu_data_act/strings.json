@@ -91,6 +91,40 @@
     },
     "action_required": {
       "message": "The EU Data Act portal needs you to sign in once in a browser, for example to accept new terms of use."
+    },
+    "recorder_not_loaded": {
+      "message": "History can only be imported while the recorder is running."
+    },
+    "entry_not_found": {
+      "message": "The selected vehicle is not a VW Group EU Data Act entry."
+    },
+    "path_not_allowed": {
+      "message": "Home Assistant may not read {path}. Put the export in the media folder, or in the www folder of the configuration folder, or add its folder to allowlist_external_dirs."
+    },
+    "file_not_found": {
+      "message": "There is no file at {path}."
+    },
+    "unreadable_export": {
+      "message": "The file could not be read as a one-off export: {error}"
+    },
+    "wrong_vehicle": {
+      "message": "The export is for a different vehicle than the selected entry."
+    }
+  },
+  "services": {
+    "import_history": {
+      "name": "Import history",
+      "description": "Adds the history in a one-off export from the EU Data Act portal to the long-term statistics of the vehicle's sensors. Only the time before existing statistics is filled in.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Vehicle",
+          "description": "The vehicle the export belongs to."
+        },
+        "path": {
+          "name": "Export file",
+          "description": "The downloaded export, as a JSON file or the ZIP holding it, in the media folder (such as /media/export.json) or the www folder (www/export.json). A relative path is read from the configuration folder."
+        }
+      }
     }
   }
 }

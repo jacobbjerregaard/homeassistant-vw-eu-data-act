@@ -1,6 +1,9 @@
 {
   "domain": "vwg_eu_data_act",
   "name": "VW Group EU Data Act",
+  "after_dependencies": [
+    "recorder"
+  ],
   "codeowners": [
     "@jacobbjerregaard"
   ],

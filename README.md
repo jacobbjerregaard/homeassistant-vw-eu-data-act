@@ -110,6 +110,50 @@ If your vehicle reports something that deserves a curated sensor, download
 the diagnostics from the device page (the VIN, credentials and position are
 redacted) and open an issue with it.
 
+## Importing history
+
+The continuous feed starts when you set it up, but the portal can also
+produce a **one-off export** of everything VW Group's backend holds for your
+vehicle: months of readings. The **Import history** action adds that history
+to Home Assistant's long-term statistics, so statistics graphs and cards
+reach back to before the integration was installed.
+
+1. On the portal, under **Data clusters → Get customised data**, request a
+   **one-time** export of your vehicle's data, and download it when it is
+   ready. It is a JSON file, or a ZIP holding one, and can be hundreds of
+   megabytes.
+2. Put it where Home Assistant may read it: the media folder (for example
+   `/media/export.json`) or the `www` folder in your configuration folder
+   (`www/export.json`).
+3. In **Developer tools → Actions**, run **VW Group EU Data Act: Import
+   history**, pick the vehicle and enter the file's path.
+
+What gets imported:
+
+| Sensor | From the export's |
+| --- | --- |
+| Battery level | `currentSOCInPct` |
+| Range | `cruisingRangeElectricInKm` |
+| Charging power | `chargePowerInKW` |
+| Outside temperature | `temperatureOutsideVehicle` (Kelvin) |
+| Odometer | `mileage` |
+
+* The history is stored as hourly statistics (average, minimum and maximum;
+  for the odometer, its reading and running total), which is what Home
+  Assistant keeps long term. It does not appear as individual state changes
+  in the history panel.
+* Only the time **before** a sensor's existing statistics is filled in, so
+  nothing Home Assistant recorded itself is overwritten, and running the
+  action again with the same export changes nothing.
+* When a sensor does not exist yet, because the continuous feed has not
+  delivered anything, its history goes into a statistic of its own instead,
+  `vwg_eu_data_act:<vin>_<sensor>`, which a statistics graph card can show.
+* The file is read a piece at a time, so even a large export needs little
+  memory. A 270 MB export takes a few seconds.
+* The export's field names were taken from an ID.7 export. If yours uses
+  others, the action reports that nothing was imported for those sensors;
+  please open an issue.
+
 ## The data dictionary
 
 VW documents the 1,141 data points a continuous data request can deliver in

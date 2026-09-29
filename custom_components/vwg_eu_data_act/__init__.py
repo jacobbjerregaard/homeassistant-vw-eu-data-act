@@ -4,13 +4,28 @@ from __future__ import annotations
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api.brands import get_brand
 from .api.client import EudaClient
 from .api.dictionary import DataDictionary, load_data_dictionary
-from .const import CONF_BRAND, DATA_DICTIONARY, PLATFORMS
+from .const import CONF_BRAND, DATA_DICTIONARY, DOMAIN, PLATFORMS
 from .coordinator import EudaConfigEntry, EudaCoordinator
+from .services import async_setup_services
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the integration's actions.
+
+    They are registered here rather than per entry so they exist even while
+    an entry cannot be set up, such as before the portal delivers any data.
+    """
+    async_setup_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: EudaConfigEntry) -> bool:
