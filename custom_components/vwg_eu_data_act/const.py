@@ -20,6 +20,8 @@ CONF_BRAND = "brand"
 CONF_VIN = "vin"
 CONF_IDENTIFIER = "identifier"
 CONF_NICKNAME = "nickname"
+#: Option: the battery's nominal usable capacity in kWh, for battery health.
+CONF_NOMINAL_CAPACITY = "nominal_capacity"
 
 #: How often the delivery listing is checked. The portal produces a dataset
 #: roughly every 15 minutes; checking more often than that only shortens the

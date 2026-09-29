@@ -78,6 +78,9 @@
       },
       "dc_share": {
         "default": "mdi:lightning-bolt-circle"
+      },
+      "battery_health": {
+        "default": "mdi:battery-heart"
       }
     }
   },

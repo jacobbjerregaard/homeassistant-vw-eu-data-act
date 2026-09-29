@@ -406,6 +406,24 @@ METRIC_SENSORS: tuple[EudaMetricDescription, ...] = (
         value=lambda m, _now: m.summary.capacity,
         attributes=lambda m: {"months": m.summary.capacity_by_month},
     ),
+    EudaMetricDescription(
+        key="battery_health",
+        translation_key="battery_health",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        # Only with the nominal capacity set in the entry's options.
+        value=lambda m, _now: m.health(m.summary.capacity),
+        attributes=lambda m: {
+            "nominal_capacity": m.nominal_capacity,
+            "months": {
+                month: m.health(capacity)
+                for month, capacity in m.summary.capacity_by_month.items()
+            }
+            if m.nominal_capacity
+            else {},
+        },
+    ),
     # Charging.
     EudaMetricDescription(
         key="last_charge_energy",

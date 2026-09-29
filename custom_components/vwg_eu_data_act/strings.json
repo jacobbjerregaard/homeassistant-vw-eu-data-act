@@ -134,6 +134,9 @@
       },
       "dc_share": {
         "name": "DC charging share"
+      },
+      "battery_health": {
+        "name": "Battery health"
       }
     }
   },
@@ -181,6 +184,20 @@
         "path": {
           "name": "Export file",
           "description": "The downloaded export, as a JSON file or the ZIP holding it, in the media folder (such as /media/export.json) or the www folder (www/export.json). A relative path is read from the configuration folder."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Battery",
+        "description": "The battery's usable capacity from the vehicle's specification, such as 77 kWh for an ID.7 Pro or 86 kWh for an ID.7 Pro S. It is only used for the battery health sensor, which shows the capacity estimated from charging as a percentage of it. Leave it empty to turn battery health off.",
+        "data": {
+          "nominal_capacity": "Nominal usable capacity"
+        },
+        "data_description": {
+          "nominal_capacity": "In kWh, the usable (net) capacity rather than the gross one."
         }
       }
     }

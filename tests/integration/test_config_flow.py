@@ -161,3 +161,19 @@ async def test_one_session_per_flow_released_at_the_end(hass, client):
         await hass.async_block_till_done()
     assert result["type"] is FlowResultType.CREATE_ENTRY
     session.detach.assert_called_once()
+
+
+async def test_options_set_and_clear_the_nominal_capacity(hass, client, config_entry):
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    assert result["step_id"] == "init"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"nominal_capacity": 86}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config_entry.options == {"nominal_capacity": 86.0}
+
+    # Leaving the field empty turns battery health off again.
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    assert config_entry.options == {}
+    await hass.async_block_till_done()

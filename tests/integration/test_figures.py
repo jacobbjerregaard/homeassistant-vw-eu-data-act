@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from homeassistant.components.recorder import Recorder
 from homeassistant.components.recorder.statistics import statistics_during_period
+from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -276,3 +277,30 @@ async def test_import_only_uses_the_time_before_the_live_feed(
     assert response["figures"]["charging_sessions"] == 1
     # One imported charge and one live one.
     assert config_entry.runtime_data.metrics.summary.sessions == 2
+
+
+async def test_battery_health_from_the_nominal_capacity(
+    hass, client, config_entry, freezer
+):
+    freezer.move_to(MONDAY + timedelta(hours=14))
+    client.files = []
+    await _setup(hass, config_entry)
+    await _deliver(hass, client, config_entry, FEED)
+    capacity = float(_state(hass, "usable_battery_capacity").state)
+
+    # Not set: no health.
+    assert _state(hass, "battery_health").state == "unknown"
+    coordinator = config_entry.runtime_data
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {"nominal_capacity": 40}
+    )
+    await hass.async_block_till_done()
+
+    health = _state(hass, "battery_health")
+    assert float(health.state) == pytest.approx(capacity / 40 * 100, abs=0.1)
+    assert health.attributes["nominal_capacity"] == 40
+    # Applied without reloading the entry.
+    assert config_entry.state is ConfigEntryState.LOADED
+    assert config_entry.runtime_data is coordinator

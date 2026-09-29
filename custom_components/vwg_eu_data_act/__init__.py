@@ -11,7 +11,7 @@ from homeassistant.helpers.typing import ConfigType
 from .api.brands import get_brand
 from .api.client import EudaClient
 from .api.dictionary import DataDictionary, load_data_dictionary
-from .const import CONF_BRAND, DATA_DICTIONARY, DOMAIN, PLATFORMS
+from .const import CONF_BRAND, CONF_NOMINAL_CAPACITY, DATA_DICTIONARY, DOMAIN, PLATFORMS
 from .coordinator import EudaConfigEntry, EudaCoordinator
 from .services import async_setup_services
 from .vehicle_metrics import MetricsRuntime
@@ -44,6 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: EudaConfigEntry) -> bool
     )
     metrics = MetricsRuntime(hass, entry.entry_id)
     await metrics.async_load()
+    metrics.nominal_capacity = entry.options.get(CONF_NOMINAL_CAPACITY)
     coordinator.metrics = metrics
 
     await coordinator.async_config_entry_first_refresh()
@@ -60,9 +61,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: EudaConfigEntry) -> bool
     _async_feed_metrics()
     entry.async_on_unload(coordinator.async_add_listener(_async_feed_metrics))
     entry.async_on_unload(metrics.async_flush)
+    entry.async_on_unload(entry.add_update_listener(_async_entry_updated))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
+
+
+async def _async_entry_updated(hass: HomeAssistant, entry: EudaConfigEntry) -> None:
+    """Apply a changed nominal capacity.
+
+    No reload: this also runs when the coordinator stores a replaced data
+    request's identifier, and the option only changes one sensor's value.
+    """
+    coordinator = entry.runtime_data
+    if coordinator.metrics is not None:
+        coordinator.metrics.nominal_capacity = entry.options.get(CONF_NOMINAL_CAPACITY)
+        coordinator.async_update_listeners()
 
 
 async def _async_get_dictionary(hass: HomeAssistant) -> DataDictionary:

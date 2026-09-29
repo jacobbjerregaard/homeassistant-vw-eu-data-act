@@ -89,6 +89,8 @@ class MetricsRuntime:
         self.history: VehicleMetrics | None = None
         self.live = VehicleMetrics(self._tz, capacity=self._capacity)
         self.summary: Summary = summarize(self.live)
+        #: The battery's nominal usable capacity, from the entry's options.
+        self.nominal_capacity: float | None = None
 
     @property
     def _tz(self):  # noqa: ANN202 - a tzinfo
@@ -134,6 +136,12 @@ class MetricsRuntime:
         if added:
             self._refresh()
             self._save()
+
+    def health(self, capacity: float | None) -> float | None:
+        """Return a capacity as a percentage of the nominal one."""
+        if capacity is None or not self.nominal_capacity:
+            return None
+        return round(capacity / self.nominal_capacity * 100, 1)
 
     @property
     def live_since(self) -> datetime | None:

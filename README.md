@@ -52,6 +52,19 @@ Pick your brand and sign in with the same e-mail and password you use on the
 portal. Then choose a vehicle. Each vehicle is a separate config entry; add the
 integration again for a second vehicle.
 
+### Nominal battery capacity
+
+Under **Configure** on the integration's card you can enter the battery's
+nominal usable capacity from the vehicle's specification: for example 77 kWh
+for an ID.7 Pro or 86 kWh for an ID.7 Pro S. The VIN does not say which
+battery a vehicle has; in Denmark, Motorregistret shows the variant.
+
+It is only used for the **Battery health** sensor. Consumption and the other
+figures keep using the capacity estimated from charging, which is measured
+on your vehicle. A large gap between the two can also mean the estimate
+reads low, rather than a worn battery: the charging power the vehicle
+reports can be somewhat below what actually goes into the battery.
+
 ## How it works
 
 * The delivery listing is checked every 5 minutes. A new dataset is
@@ -169,7 +182,8 @@ arrives and, when you import a one-off export, from the vehicle's history.
 | Consumption this week / last week | kWh/100 km per calendar week; *last week* lists the past 26 weeks as an attribute |
 | Consumption this month / last month | kWh/100 km per month; *last month* lists the past 24 months as an attribute |
 | Consumption below 0 °C, 0–10 °C, 10–20 °C, above 20 °C | Consumption while driving, by outside temperature |
-| Usable battery capacity | Estimated from charging sessions; the `months` attribute is its trend, for keeping an eye on battery health |
+| Usable battery capacity | Estimated from charging sessions; the `months` attribute is its trend |
+| Battery health | That estimate as a percentage of the nominal capacity, once you set it (see [Configuration](#configuration)); with a monthly trend |
 | Last charge energy, average power, peak power, type | The latest charging session, AC or DC |
 | DC charging share | How much of the energy charged came from DC fast charging |
 
