@@ -56,12 +56,12 @@ from custom_components.vwg_eu_data_act.api.exception import (  # noqa: E402
     EudaError,
 )
 from custom_components.vwg_eu_data_act.const import INITIAL_DATASETS  # noqa: E402
-from custom_components.vwg_eu_data_act.sensor import (  # noqa: E402
-    _DICTIONARY_UNITS,
-    _DISTANCE_UNITS,
+from custom_components.vwg_eu_data_act.descriptions import (  # noqa: E402
+    DISTANCE_UNITS,
     SENSORS,
-    _find_field,
+    find_field,
 )
+from custom_components.vwg_eu_data_act.sensor import _DICTIONARY_UNITS  # noqa: E402
 
 OUT = REPO / "datasets"
 
@@ -225,7 +225,7 @@ async def run(brand: str, email: str, password: str, vin: str | None, kind: str)
 
         say("\n== Curated sensors")
         for description in SENSORS:
-            field = _find_field(description, dataset)
+            field = find_field(description, dataset)
             if field is None:
                 say(f"  {description.key:26} (not created)")
                 continue
@@ -235,7 +235,7 @@ async def run(brand: str, email: str, password: str, vin: str | None, kind: str)
                 reported = dataset.value(field.unit_field)
                 if isinstance(reported, str):
                     reported = reported.upper()
-                unit = _DISTANCE_UNITS.get(reported, unit)  # type: ignore[arg-type]
+                unit = DISTANCE_UNITS.get(reported, unit)  # type: ignore[arg-type]
             say(f"  {description.key:26} {value!r} {unit or ''}  <- {field.name}")
 
         say("\n== Data points against the dictionary")

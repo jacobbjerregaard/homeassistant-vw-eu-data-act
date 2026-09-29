@@ -41,7 +41,7 @@ async def async_get_config_entry_diagnostics(
     dataset: dict[str, Any] | None = None
     if data is not None:
         dataset = {
-            "file_created": data.file.created,
+            "file_created": data.file.created if data.file is not None else None,
             "captured_at": data.dataset.captured_at,
             "fields": sorted(
                 (

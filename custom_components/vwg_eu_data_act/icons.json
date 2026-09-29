@@ -24,6 +24,60 @@
       },
       "dataset_created": {
         "default": "mdi:database-clock"
+      },
+      "energy_charged": {
+        "default": "mdi:battery-charging"
+      },
+      "energy_used": {
+        "default": "mdi:battery-minus"
+      },
+      "energy_used_parked": {
+        "default": "mdi:parking"
+      },
+      "charging_sessions": {
+        "default": "mdi:ev-plug-type2"
+      },
+      "consumption_this_week": {
+        "default": "mdi:gauge"
+      },
+      "consumption_last_week": {
+        "default": "mdi:gauge"
+      },
+      "consumption_this_month": {
+        "default": "mdi:gauge"
+      },
+      "consumption_last_month": {
+        "default": "mdi:gauge"
+      },
+      "consumption_below_0": {
+        "default": "mdi:snowflake-thermometer"
+      },
+      "consumption_0_to_10": {
+        "default": "mdi:thermometer-low"
+      },
+      "consumption_10_to_20": {
+        "default": "mdi:thermometer"
+      },
+      "consumption_above_20": {
+        "default": "mdi:thermometer-high"
+      },
+      "battery_capacity": {
+        "default": "mdi:battery-heart-variant"
+      },
+      "last_charge_energy": {
+        "default": "mdi:ev-station"
+      },
+      "last_charge_average_power": {
+        "default": "mdi:flash"
+      },
+      "last_charge_peak_power": {
+        "default": "mdi:flash-alert"
+      },
+      "last_charge_type": {
+        "default": "mdi:ev-plug-ccs2"
+      },
+      "dc_share": {
+        "default": "mdi:lightning-bolt-circle"
       }
     }
   },

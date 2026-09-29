@@ -154,6 +154,51 @@ What gets imported:
   others, the action reports that nothing was imported for those sensors;
   please open an issue.
 
+## Calculated figures
+
+Besides what the vehicle reports, the integration works out figures from
+how those readings change over time. They come from the continuous feed as it
+arrives and, when you import a one-off export, from the vehicle's history.
+
+| Sensor | What it shows |
+| --- | --- |
+| Energy charged | Energy put into the battery, as a running total you can add to the **Energy dashboard** |
+| Energy used | Energy taken out of the battery (net of regeneration) |
+| Energy used while parked | The part used while not driving: preconditioning, standby |
+| Charging sessions | Number of charges; the `including_history` attribute counts imported ones too |
+| Consumption this week / last week | kWh/100 km per calendar week; *last week* lists the past 26 weeks as an attribute |
+| Consumption this month / last month | kWh/100 km per month; *last month* lists the past 24 months as an attribute |
+| Consumption below 0 °C, 0–10 °C, 10–20 °C, above 20 °C | Consumption while driving, by outside temperature |
+| Usable battery capacity | Estimated from charging sessions; the `months` attribute is its trend, for keeping an eye on battery health |
+| Last charge energy, average power, peak power, type | The latest charging session, AC or DC |
+| DC charging share | How much of the energy charged came from DC fast charging |
+
+How they are worked out, and what to keep in mind:
+
+* **Capacity** is the energy a charging session put in (integrated from the
+  charging power) divided by the percentage it added, taken as the median of
+  the 20 most recent sessions that added at least 20 %. Single sessions vary
+  by several kWh, as the state of charge is only reported in whole percent;
+  the median is steady.
+* **Consumption** is the net change in state of charge, converted to kWh
+  with that capacity, over the distance on the odometer. Weekly and monthly
+  consumption includes energy used while parked; the temperature bands only
+  count driving.
+* All energy figures are **battery-side**. What your charger draws from the
+  grid is higher by the charging losses, typically 10 to 15 % for AC, which
+  the data does not show.
+* The continuous feed only sends a snapshot every 15 minutes, so figures
+  from it are rougher than from an export's history, and settle over weeks
+  rather than days.
+* Weeks and months with less than 20 km of driving show no consumption.
+* **Energy totals and the Energy dashboard:** the running totals only count
+  what arrived live. Imported history goes into their long-term statistics
+  instead, so the Energy dashboard shows past months without the sensor
+  jumping by months of energy at once.
+* The figures are kept in Home Assistant's storage and survive restarts.
+  Importing another export replaces the imported part; only the time before
+  the live feed started is used, so nothing is counted twice.
+
 ## The data dictionary
 
 VW documents the 1,141 data points a continuous data request can deliver in

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.typing import ConfigType
@@ -14,6 +14,7 @@ from .api.dictionary import DataDictionary, load_data_dictionary
 from .const import CONF_BRAND, DATA_DICTIONARY, DOMAIN, PLATFORMS
 from .coordinator import EudaConfigEntry, EudaCoordinator
 from .services import async_setup_services
+from .vehicle_metrics import MetricsRuntime
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -41,8 +42,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: EudaConfigEntry) -> bool
     coordinator = EudaCoordinator(
         hass, entry, client, await _async_get_dictionary(hass)
     )
+    metrics = MetricsRuntime(hass, entry.entry_id)
+    await metrics.async_load()
+    coordinator.metrics = metrics
+
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+
+    @callback
+    def _async_feed_metrics() -> None:
+        metrics.add_datasets(coordinator.received)
+        coordinator.received = []
+
+    # Feed what the first refresh brought, then every later update. This
+    # listener is added before the platforms', so the figures are updated
+    # before the sensors read them.
+    _async_feed_metrics()
+    entry.async_on_unload(coordinator.async_add_listener(_async_feed_metrics))
+    entry.async_on_unload(metrics.async_flush)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True

@@ -27,6 +27,7 @@ from typing import IO, Any
 
 from .dataset import parse_timestamp
 from .exception import EudaError
+from .metrics import Observation
 
 _CHUNK = 1 << 20
 _VIN_RE = re.compile(r'"vin"\s*:\s*"([A-Za-z0-9]{17})"')
@@ -65,6 +66,19 @@ EXPORT_SERIES: tuple[ExportSeries, ...] = (
 )
 
 _BY_FIELD = {series.field: series for series in EXPORT_SERIES}
+
+#: Export fields fed to :class:`~.metrics.VehicleMetrics`, and the
+#: :class:`~.metrics.Observation` attribute each becomes.
+_OBSERVED = {
+    "currentSOCInPct": "soc",
+    "mileage": "odometer",
+    "chargePowerInKW": "charge_power",
+    "temperatureOutsideVehicle": "temperature",
+    "chargeType": "charge_type",
+}
+#: In this order when readings share a timestamp: the state of charge before
+#: the charging power, so a session starting then knows its starting charge.
+_KINDS = ("soc", "odometer", "temperature", "charge_type", "charge_power")
 
 
 @dataclass(slots=True)
@@ -108,6 +122,26 @@ class ExportHistory:
     entries: int = 0
     #: Entries of a known series that were used.
     readings: int = 0
+    #: Readings for the metrics, as (timestamp, kind, value), unsorted.
+    observed: list[tuple[float, int, Any]] = field(default_factory=list)
+
+    def observations(self, before: datetime | None = None) -> list[Observation]:
+        """Return the readings for the metrics in time order.
+
+        :param before: Leave out readings from this moment on.
+        """
+        limit = before.timestamp() if before is not None else float("inf")
+        result: list[Observation] = []
+        for timestamp, kind, value in sorted(self.observed):
+            if timestamp >= limit:
+                break
+            result.append(
+                Observation(
+                    time=datetime.fromtimestamp(timestamp, UTC),
+                    **{_KINDS[kind]: value},
+                )
+            )
+        return result
 
     def unit(self, sensor: str) -> str:
         """Return the unit a series' values are in."""
@@ -125,6 +159,7 @@ def read_export(stream: IO[str]) -> ExportHistory:
     value are skipped. This does blocking I/O.
     """
     buckets: dict[str, dict[datetime, _Accumulator]] = {}
+    observed: list[tuple[float, int, Any]] = []
     vin: str | None = None
     entries = readings = 0
 
@@ -133,7 +168,10 @@ def read_export(stream: IO[str]) -> ExportHistory:
             vin = header
             continue
         entries += 1
-        series = _BY_FIELD.get(item.get("dataFieldName"))  # type: ignore[arg-type]
+        name = item.get("dataFieldName")
+        if (kind := _OBSERVED.get(name)) is not None:  # type: ignore[arg-type]
+            _observe(observed, kind, item)
+        series = _BY_FIELD.get(name)  # type: ignore[arg-type]
         if series is None:
             continue
         when = parse_timestamp(item.get("timestampUtc"))
@@ -167,7 +205,31 @@ def read_export(stream: IO[str]) -> ExportHistory:
         },
         entries=entries,
         readings=readings,
+        observed=observed,
     )
+
+
+def _observe(observed: list[tuple[float, int, Any]], kind: str, item: dict) -> None:
+    """Keep one reading for the metrics, if it is usable."""
+    when = parse_timestamp(item.get("timestampUtc"))
+    raw = item.get("value")
+    if when is None or raw is None:
+        return
+    value: Any
+    if kind == "charge_type":
+        value = str(raw).upper()
+        if value not in ("AC", "DC"):
+            return
+    else:
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return
+        if value != value:  # NaN
+            return
+        if kind == "temperature":
+            value = _kelvin_to_celsius(value)
+    observed.append((when.timestamp(), _KINDS.index(kind), value))
 
 
 def read_export_file(path: Path) -> ExportHistory:

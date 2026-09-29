@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -33,6 +34,9 @@ from .const import (
     UPDATE_INTERVAL,
 )
 
+if TYPE_CHECKING:
+    from .vehicle_metrics import MetricsRuntime
+
 _LOGGER = logging.getLogger(__name__)
 
 _EPOCH = datetime.min.replace(tzinfo=UTC)
@@ -42,8 +46,9 @@ _EPOCH = datetime.min.replace(tzinfo=UTC)
 class VehicleData:
     """The vehicle's state: every dataset so far, merged in order."""
 
-    #: The newest delivery file merged into ``dataset``.
-    file: DatasetFile
+    #: The newest delivery file merged into ``dataset``; ``None`` while the
+    #: portal has not delivered anything yet.
+    file: DatasetFile | None
     dataset: Dataset
 
 
@@ -81,6 +86,12 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
         self._transient_failures = 0
         #: Failed download attempts per delivery file name.
         self._file_failures: dict[str, int] = {}
+        #: The datasets downloaded by the latest update, oldest first, each
+        #: on its own rather than merged: the metrics must only see readings
+        #: the vehicle actually sent at that time.
+        self.received: list[tuple[DatasetFile, Dataset]] = []
+        #: The vehicle's calculated figures; set up by the integration.
+        self.metrics: MetricsRuntime | None = None
 
     @property
     def identifier(self) -> str:
@@ -120,7 +131,19 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
         self._transient_failures = 0
         return data
 
+    def _nothing_yet(self) -> VehicleData:
+        """Return the previous state, or an empty one before any delivery.
+
+        The entry sets up without data, so its sensors exist (as unknown)
+        while a new data request has not produced anything yet. The history
+        import needs them to put the past into.
+        """
+        if self.data is not None:
+            return self.data
+        return VehicleData(file=None, dataset=Dataset(vin=self.vin))
+
     async def _async_fetch(self) -> VehicleData:
+        self.received = []
         files = await self._async_list_content()
         # A data request that was deleted and set up again on the portal gets
         # a new identifier, and the old one stops listing anything.
@@ -128,9 +151,7 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
             files = await self._async_list_content()
 
         if not files:
-            if self.data is not None:
-                return self.data
-            raise EudaNoDataError("The portal has not delivered any data yet")
+            return self._nothing_yet()
 
         # Forget failures of files that have rotated out of the listing.
         listed = {file.name for file in files}
@@ -140,12 +161,14 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
 
         pending = self._pending(files)
         if not pending:
-            if self.data is not None:
-                return self.data
-            raise EudaNoDataError("None of the delivered datasets could be read")
+            return self._nothing_yet()
 
         newest = self.data.file if self.data is not None else None
-        dataset = self.data.dataset if self.data is not None else None
+        dataset = (
+            self.data.dataset
+            if self.data is not None and self.data.file is not None
+            else None
+        )
         error: EudaError | None = None
         for file in pending:
             try:
@@ -160,6 +183,7 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
                 continue
             dataset = received if dataset is None else dataset.merged_with(received)
             newest = file
+            self.received.append((file, received))
 
         if dataset is None or newest is None:
             # Nothing could be read and there is no earlier state to show.
@@ -176,7 +200,7 @@ class EudaCoordinator(DataUpdateCoordinator[VehicleData]):
 
     def _pending(self, files: list[DatasetFile]) -> list[DatasetFile]:
         """Return the files to download and merge, oldest first."""
-        if self.data is None:
+        if self.data is None or self.data.file is None:
             candidates = files[-INITIAL_DATASETS:]
         else:
             merged = _created(self.data.file)

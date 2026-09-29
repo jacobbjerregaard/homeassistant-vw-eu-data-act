@@ -9,7 +9,7 @@ from custom_components.vwg_eu_data_act.api.exception import (
     EudaError,
 )
 from custom_components.vwg_eu_data_act.const import MAX_FILE_ATTEMPTS
-from custom_components.vwg_eu_data_act.sensor import SENSORS
+from custom_components.vwg_eu_data_act.descriptions import SENSORS
 from tests.conftest import load_fixture
 
 from .conftest import delivery

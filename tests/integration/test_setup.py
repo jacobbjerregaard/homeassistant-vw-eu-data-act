@@ -120,11 +120,22 @@ async def test_replaced_data_request_is_followed(hass, client, config_entry):
 
 
 @pytest.mark.parametrize("files", [[], [delivery("x_no_content_found.zip", 0)]])
-async def test_no_data_yet_retries_setup(hass, client, config_entry, files):
+async def test_no_data_yet_sets_up_anyway(hass, client, config_entry, files):
+    """A new data request has delivered nothing: set up, with unknown values."""
     client.files = files
-    await hass.config_entries.async_setup(config_entry.entry_id)
-    assert config_entry.state is ConfigEntryState.SETUP_RETRY
-    assert "has no data for this vehicle yet" in config_entry.reason
+    await _setup(hass, config_entry)
+
+    assert config_entry.state is ConfigEntryState.LOADED
+    # Curated sensors appear once their fields arrive...
+    assert hass.states.get("sensor.id_4_battery_level") is None
+    # ...but the calculated figures are there, to receive imported history.
+    assert hass.states.get("sensor.id_4_energy_charged").state == "0.0"
+    assert hass.states.get("sensor.id_4_consumption_last_month").state == "unknown"
+
+    # Data arriving later is picked up as usual.
+    client.files = [delivery("a.zip", 0)]
+    await _refresh(hass, config_entry)
+    assert hass.states.get("sensor.id_4_battery_level").state == "72"
 
 
 async def test_empty_listing_keeps_previous_data(hass, client, config_entry):

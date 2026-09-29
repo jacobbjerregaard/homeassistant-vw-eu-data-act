@@ -76,6 +76,64 @@
       },
       "dataset_created": {
         "name": "Dataset delivered"
+      },
+      "energy_charged": {
+        "name": "Energy charged"
+      },
+      "energy_used": {
+        "name": "Energy used"
+      },
+      "energy_used_parked": {
+        "name": "Energy used while parked"
+      },
+      "charging_sessions": {
+        "name": "Charging sessions"
+      },
+      "consumption_this_week": {
+        "name": "Consumption this week"
+      },
+      "consumption_last_week": {
+        "name": "Consumption last week"
+      },
+      "consumption_this_month": {
+        "name": "Consumption this month"
+      },
+      "consumption_last_month": {
+        "name": "Consumption last month"
+      },
+      "consumption_below_0": {
+        "name": "Consumption below 0 °C"
+      },
+      "consumption_0_to_10": {
+        "name": "Consumption 0–10 °C"
+      },
+      "consumption_10_to_20": {
+        "name": "Consumption 10–20 °C"
+      },
+      "consumption_above_20": {
+        "name": "Consumption above 20 °C"
+      },
+      "battery_capacity": {
+        "name": "Usable battery capacity"
+      },
+      "last_charge_energy": {
+        "name": "Last charge energy"
+      },
+      "last_charge_average_power": {
+        "name": "Last charge average power"
+      },
+      "last_charge_peak_power": {
+        "name": "Last charge peak power"
+      },
+      "last_charge_type": {
+        "name": "Last charge type",
+        "state": {
+          "ac": "AC",
+          "dc": "DC"
+        }
+      },
+      "dc_share": {
+        "name": "DC charging share"
       }
     }
   },

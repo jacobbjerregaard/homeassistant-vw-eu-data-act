@@ -36,7 +36,18 @@ from homeassistant.helpers import entity_registry as er
 
 from .api.exception import EudaError
 from .api.export import ExportHistory, HourlyStat, read_export_file
+from .api.metrics import VehicleMetrics
 from .const import CONF_VIN, DOMAIN
+from .vehicle_metrics import MetricsRuntime
+
+#: The running totals of the calculated figures, as (sensor, unit, index in
+#: ``VehicleMetrics.hours``), whose history an import adds to statistics.
+_DERIVED_TOTALS: tuple[tuple[str, str | None, int], ...] = (
+    ("energy_charged", "kWh", 0),
+    ("energy_used", "kWh", 1),
+    ("energy_used_parked", "kWh", 2),
+    ("charging_sessions", None, 3),
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -108,15 +119,89 @@ async def _async_import_history(
 
     imported = {
         sensor: await _async_import_series(
-            hass, entry.title, vin, sensor, hours, history
+            hass,
+            entry.title,
+            vin,
+            sensor,
+            hours,
+            unit=history.unit(sensor),
+            total=history.is_total(sensor),
         )
         for sensor, hours in history.series.items()
     }
+
+    # The calculated figures. Use the running entry's trackers if it is set
+    # up; otherwise load, update and store them on their own.
+    coordinator = getattr(entry, "runtime_data", None)
+    runtime: MetricsRuntime | None = getattr(coordinator, "metrics", None)
+    if runtime is None:
+        runtime = MetricsRuntime(hass, entry.entry_id)
+        await runtime.async_load()
+    tracker = await hass.async_add_executor_job(
+        _build_history, history, runtime.live_since, runtime.live.tz
+    )
+    await runtime.async_set_history(tracker)
+    for sensor, unit, index in _DERIVED_TOTALS:
+        hours = [
+            HourlyStat(start=hour, mean=value, min=value, max=value, last=value)
+            for hour, totals in sorted(tracker.hours.items())
+            for value in (float(totals[index]),)
+        ]
+        if hours:
+            live_state = (
+                runtime.live.charged_kwh,
+                runtime.live.used_kwh,
+                runtime.live.parked_kwh,
+                float(runtime.live.sessions),
+            )[index]
+            imported[sensor] = await _async_import_series(
+                hass,
+                entry.title,
+                vin,
+                sensor,
+                hours,
+                unit=unit,
+                total=True,
+                live_state=live_state,
+            )
+    if coordinator is not None and hasattr(coordinator, "async_update_listeners"):
+        coordinator.async_update_listeners()
+
     _LOGGER.info(
         "Imported history from an export: %s",
         ", ".join(f"{key} {result['hours']} h" for key, result in imported.items()),
     )
-    return cast(ServiceResponse, {"readings": history.readings, "series": imported})
+    return cast(
+        ServiceResponse,
+        {
+            "readings": history.readings,
+            "series": imported,
+            "figures": {
+                "capacity": runtime.summary.capacity,
+                "charging_sessions": tracker.sessions,
+                "from": tracker.first_time.isoformat() if tracker.first_time else None,
+                "to": tracker.last_time.isoformat() if tracker.last_time else None,
+            },
+        },
+    )
+
+
+def _build_history(
+    history: ExportHistory, before: datetime | None, tz: Any
+) -> VehicleMetrics:
+    """Calculate the figures of an export's history. This is CPU-heavy.
+
+    Twice: the first pass estimates the battery capacity from the charging
+    sessions, the second converts charge used to kWh with it throughout,
+    rather than with a first estimate that improves as months go by.
+    """
+    observations = history.observations(before=before)
+    first = VehicleMetrics(tz)
+    first.add_all(observations)
+    capacity = first.own_capacity
+    tracker = VehicleMetrics(tz, capacity=lambda: capacity, record_hours=True)
+    tracker.add_all(observations)
+    return tracker
 
 
 async def _async_import_series(
@@ -125,7 +210,10 @@ async def _async_import_series(
     vin: str,
     sensor: str,
     hours: list[HourlyStat],
-    history: ExportHistory,
+    *,
+    unit: str | None,
+    total: bool,
+    live_state: float | None = None,
 ) -> dict[str, Any]:
     """Import one series; return what was done, for the action's response."""
     from homeassistant.components.recorder import get_instance
@@ -153,7 +241,7 @@ async def _async_import_series(
 
     # Statistics must stay in the unit they are already kept in, which for a
     # sensor follows its display unit (miles, say, instead of km).
-    native = history.unit(sensor)
+    native = unit
     unit_class: str | None
     if statistic_id in existing_meta:
         meta = cast(dict[str, Any], existing_meta[statistic_id][1])
@@ -199,9 +287,32 @@ async def _async_import_series(
     if not todo:
         return {"statistic_id": statistic_id, "hours": 0}
 
-    total = history.is_total(sensor)
     statistics: list[dict[str, Any]]
-    if total:
+    if total and live_state is not None:
+        current = live_state
+        # A calculated running total. What counts is that the sum joins up,
+        # so the Energy dashboard shows each hour's change and no jump where
+        # the import ends. With existing statistics, the last imported hour
+        # gets their first sum; without, the sensor's own current value, as
+        # Home Assistant will continue from the last row it finds.
+        totals = [convert(hour.last) for hour in todo]
+        end = totals[-1]
+        first_sum = first.get("sum") if first is not None else None
+        if first is not None and first_sum is not None:
+            statistics = [
+                {"start": h.start, "state": value, "sum": first_sum - (end - value)}
+                for h, value in zip(todo, totals, strict=True)
+            ]
+        else:
+            statistics = [
+                {
+                    "start": h.start,
+                    "state": current - (end - value),
+                    "sum": value - end,
+                }
+                for h, value in zip(todo, totals, strict=True)
+            ]
+    elif total:
         # A running total also needs a sum that joins up with the existing
         # statistics: count back from their first hour, so the sum there is
         # unchanged and every earlier hour is lower by the distance between.

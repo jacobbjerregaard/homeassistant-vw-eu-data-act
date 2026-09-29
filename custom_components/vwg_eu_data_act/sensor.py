@@ -1,10 +1,8 @@
 """Sensors for the VW Group EU Data Act integration.
 
-Each sensor lists the dataset fields it can be read from, in order of
-preference, because the same quantity has a different name on MEB/SSP
-vehicles (dotted names) and on older platforms (flat names). A sensor is
-created once one of its fields shows up in a dataset, so a petrol car does not
-get a battery sensor it could never fill.
+The curated sensors (see :mod:`.descriptions`) are created once one of their
+fields shows up in a dataset, so a petrol car does not get a battery sensor
+it could never fill.
 
 Besides those curated sensors, every data point in a dataset gets a sensor of
 its own, disabled by default and named after the point in VW's data
@@ -31,6 +29,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfElectricPotential,
     UnitOfEnergy,
+    UnitOfEnergyDistance,
     UnitOfLength,
     UnitOfPower,
     UnitOfPressure,
@@ -42,217 +41,26 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
-from .api.dataset import DataPoint, Dataset, Value
+from .api.dataset import DataPoint
 from .api.dictionary import DictionaryEntry
 from .coordinator import EudaConfigEntry, EudaCoordinator, VehicleData
+from .descriptions import (
+    SENSORS,
+    Converter,
+    EudaSensorDescription,
+    as_number,
+    decikelvin,
+    find_field,
+    read_value,
+)
 from .entity import EudaEntity
+from .vehicle_metrics import MetricsRuntime, this_and_last_month, this_and_last_week
 
 # Entities only change when a new dataset is downloaded; parallel updates are
 # coordinated centrally.
 PARALLEL_UPDATES = 0
-
-type Converter = Callable[[Value], StateType]
-
-#: Distance unit enumerations. Some platforms send the enumeration's name,
-#: others its index, which the data dictionary documents as 0 = km, 1 = miles.
-_DISTANCE_UNITS: dict[str | int, str] = {
-    "KM": UnitOfLength.KILOMETERS,
-    "KILOMETER": UnitOfLength.KILOMETERS,
-    "KILOMETERS": UnitOfLength.KILOMETERS,
-    "MILES": UnitOfLength.MILES,
-    "MILE": UnitOfLength.MILES,
-    0: UnitOfLength.KILOMETERS,
-    1: UnitOfLength.MILES,
-}
-
-#: Older platforms send this when a duration is not available.
-_INVALID_MINUTES = 65535
-
-
-def _number(value: Value) -> int | float | None:
-    """Pass numbers through; anything else is unknown."""
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        return None
-    return value
-
-
-def _decikelvin(value: Value) -> StateType:
-    """Convert the flat platforms' deci-Kelvin temperatures to Celsius."""
-    number = _number(value)
-    return None if number is None else round(number / 10 - 273.15, 1)
-
-
-def _minutes_as_seconds(value: Value) -> StateType:
-    """Convert minutes to seconds, dropping the "not available" marker."""
-    number = _number(value)
-    if number is None or number >= _INVALID_MINUTES:
-        return None
-    return number * 60
-
-
-def _text(value: Value) -> StateType:
-    """Return enumerations and free text lower-cased, for stable states."""
-    return value.lower() if isinstance(value, str) else None
-
-
-@dataclass(frozen=True, slots=True)
-class Field:
-    """A dataset field a sensor can be read from."""
-
-    name: str
-    #: The data dictionary key the vehicles seen so far deliver this field
-    #: under. Many names have several keys that mean different things, so the
-    #: point is looked up by key first and by name only as a fallback.
-    key: str | None = None
-    convert: Converter = _number
-    #: A companion field holding the distance unit, such as ``mileage.unit``.
-    unit_field: str | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class EudaSensorDescription(SensorEntityDescription):
-    """Describes a sensor fed from one of several dataset fields."""
-
-    fields: tuple[Field, ...]
-
-
-SENSORS: tuple[EudaSensorDescription, ...] = (
-    EudaSensorDescription(
-        key="battery_level",
-        translation_key="battery_level",
-        device_class=SensorDeviceClass.BATTERY,
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        fields=(
-            # Preferred: it is also in the reduced datasets a parked vehicle
-            # delivers, where battery_state_report.soc is left out.
-            Field("battery_level_HV.value", "ac1108b1-b8cc-3db9-a663-03d387e42223"),
-            Field("battery_state_report.soc", "506cb83e-f99f-3af3-bbeb-0429b69a78d9"),
-            Field("state_of_charge", "ae0294b4-1286-3e98-a818-1485b8d88430"),
-            Field("hv_soc", "f89ed652-d104-3fa6-b7e2-ab7543309e7b"),
-        ),
-    ),
-    EudaSensorDescription(
-        key="target_battery_level",
-        translation_key="target_battery_level",
-        native_unit_of_measurement=PERCENTAGE,
-        fields=(Field("settings.target_soc", "b3b04f31-b10e-38aa-b8ad-c0da7c06caea"),),
-    ),
-    EudaSensorDescription(
-        key="charging_power",
-        translation_key="charging_power",
-        device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        fields=(
-            Field(
-                "battery_state_report.charge_power",
-                "c8cb205f-01c6-3c81-bda1-059b99ae6515",
-            ),
-        ),
-    ),
-    EudaSensorDescription(
-        key="charging_time_remaining",
-        translation_key="charging_time_remaining",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.MINUTES,
-        fields=(
-            Field(
-                "battery_state_report.remaining_charging_time_complete",
-                "7405c11f-4d20-36d2-8381-18364aa1f444",
-            ),
-            Field(
-                "remaining_charging_time",
-                "cf28f7d9-6201-30b8-82e5-a461968d30dc",
-                _minutes_as_seconds,
-            ),
-        ),
-    ),
-    EudaSensorDescription(
-        key="charging_state",
-        translation_key="charging_state",
-        fields=(
-            Field(
-                "charging_state_report.current_charge_state",
-                "a08cca2b-ed42-37bc-b160-d015ce205d3d",
-                _text,
-            ),
-            Field("charging_state", "9da735bb-c5d5-39f8-bf53-0fa2a367aa8f", _text),
-        ),
-    ),
-    EudaSensorDescription(
-        key="plug_state",
-        translation_key="plug_state",
-        fields=(Field("plug_state", "c111830c-f959-30d2-859a-ea996190d864", _text),),
-    ),
-    EudaSensorDescription(
-        key="odometer",
-        translation_key="odometer",
-        device_class=SensorDeviceClass.DISTANCE,
-        native_unit_of_measurement=UnitOfLength.KILOMETERS,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        suggested_display_precision=0,
-        fields=(
-            Field(
-                "mileage.value",
-                "75d65f00-5fa8-334a-826d-e73e91fe5c8d",
-                unit_field="mileage.unit",
-            ),
-            Field("mileage", "41c0805c-43e5-313e-9dfb-356cb8d20f7c"),
-        ),
-    ),
-    EudaSensorDescription(
-        key="range",
-        translation_key="range",
-        device_class=SensorDeviceClass.DISTANCE,
-        native_unit_of_measurement=UnitOfLength.KILOMETERS,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=0,
-        fields=(
-            Field(
-                "estimatedcruisingrangeprimary.value",
-                "b9c90aa6-9495-362c-99c2-1963f8bcfe7b",
-                unit_field="estimatedcruisingrangeprimary.unit",
-            ),
-            Field("cruising_range_combined", "153e8c40-4c6c-3c17-a11b-0ecc35d55b81"),
-        ),
-    ),
-    EudaSensorDescription(
-        key="fuel_level",
-        translation_key="fuel_level",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        fields=(
-            Field("fuel_level_current_level", "1503760b-5570-3001-8ffc-1bb6f464948e"),
-        ),
-    ),
-    EudaSensorDescription(
-        key="outside_temperature",
-        translation_key="outside_temperature",
-        device_class=SensorDeviceClass.TEMPERATURE,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
-        state_class=SensorStateClass.MEASUREMENT,
-        fields=(
-            Field("outdoor_temperature", "b6ea5ae8-53ff-386d-8415-1baa0602bbb6"),
-            Field(
-                "outside_temperature",
-                "6810b781-e54a-35e8-af98-fcdefb54bac6",
-                _decikelvin,
-            ),
-        ),
-    ),
-)
-
-
-def _find_field(description: EudaSensorDescription, dataset: Dataset) -> Field | None:
-    """Return the first of a sensor's fields the dataset has a value for."""
-    for candidate in description.fields:
-        if dataset.value(candidate.name, candidate.key) is not None:
-            return candidate
-    return None
 
 
 async def async_setup_entry(
@@ -273,7 +81,7 @@ async def async_setup_entry(
         new: list[SensorEntity] = [
             EudaSensor(coordinator, description)
             for description in SENSORS
-            if description.key not in added and _find_field(description, dataset)
+            if description.key not in added and find_field(description, dataset)
         ]
         added.update(entity.entity_description.key for entity in new)
         for key, point in dataset.points.items():
@@ -288,13 +96,20 @@ async def async_setup_entry(
 
     _async_add_new()
     entry.async_on_unload(coordinator.async_add_listener(_async_add_new))
+    if coordinator.metrics is not None:
+        async_add_entities(
+            EudaMetricSensor(coordinator, coordinator.metrics, description)
+            for description in METRIC_SENSORS
+        )
     async_add_entities(
         [
             EudaTimestampSensor(
                 coordinator, "last_seen", lambda d: d.dataset.captured_at
             ),
             EudaTimestampSensor(
-                coordinator, "dataset_created", lambda d: d.file.created
+                coordinator,
+                "dataset_created",
+                lambda d: d.file.created if d.file is not None else None,
             ),
         ]
     )
@@ -315,19 +130,7 @@ class EudaSensor(EudaEntity, SensorEntity):
 
     def _update_state(self) -> None:
         """Read the value and unit from the current state, once per update."""
-        dataset = self.coordinator.data.dataset
-        field = _find_field(self.entity_description, dataset)
-        unit = self.entity_description.native_unit_of_measurement
-        value: StateType = None
-        if field is not None:
-            value = field.convert(dataset.value(field.name, field.key))
-            if field.unit_field:
-                # A companion unit field can switch a distance to miles.
-                reported = dataset.value(field.unit_field)
-                if isinstance(reported, str):
-                    reported = reported.upper()
-                if isinstance(reported, str | int) and reported in _DISTANCE_UNITS:
-                    unit = _DISTANCE_UNITS[reported]
+        value, unit = read_value(self.entity_description, self.coordinator.data.dataset)
         self._attr_native_value = value
         self._attr_native_unit_of_measurement = unit
 
@@ -366,7 +169,7 @@ class _Unit:
 
     unit: str
     device_class: SensorDeviceClass | None = None
-    convert: Converter = _number
+    convert: Converter = as_number
 
 
 #: Units from the data dictionary that can be mapped with confidence. Ones it
@@ -383,7 +186,7 @@ _DICTIONARY_UNITS: dict[str, _Unit] = {
     "kmPerHour": _Unit(UnitOfSpeed.KILOMETERS_PER_HOUR, SensorDeviceClass.SPEED),
     "bar": _Unit(UnitOfPressure.BAR, SensorDeviceClass.PRESSURE),
     "°C": _Unit(UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE),
-    "dK": _Unit(UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, _decikelvin),
+    "dK": _Unit(UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, decikelvin),
     "l": _Unit(UnitOfVolume.LITERS, SensorDeviceClass.VOLUME_STORAGE),
     "V": _Unit(UnitOfElectricPotential.VOLT, SensorDeviceClass.VOLTAGE),
     "1/min": _Unit(REVOLUTIONS_PER_MINUTE),
@@ -465,3 +268,220 @@ class EudaDataPointSensor(EudaEntity, SensorEntity):
         if (point := self._point) is not None and point.timestamp is not None:
             attributes["measured"] = point.timestamp.isoformat()
         return attributes
+
+
+# -- calculated figures -------------------------------------------------------
+
+
+@dataclass(frozen=True, kw_only=True)
+class EudaMetricDescription(SensorEntityDescription):
+    """Describes a sensor showing a figure calculated over time."""
+
+    value: Callable[[MetricsRuntime, datetime], StateType]
+    attributes: Callable[[MetricsRuntime], dict[str, Any]] | None = None
+
+
+def _week(offset: int) -> Callable[[MetricsRuntime, datetime], StateType]:
+    def value(metrics: MetricsRuntime, now: datetime) -> StateType:
+        key = this_and_last_week(now)[offset]
+        return metrics.summary.consumption(metrics.summary.weeks.get(key))
+
+    return value
+
+
+def _month(offset: int) -> Callable[[MetricsRuntime, datetime], StateType]:
+    def value(metrics: MetricsRuntime, now: datetime) -> StateType:
+        key = this_and_last_month(now)[offset]
+        return metrics.summary.consumption(metrics.summary.months.get(key))
+
+    return value
+
+
+def _band(band: str) -> Callable[[MetricsRuntime, datetime], StateType]:
+    return lambda metrics, _now: metrics.summary.band_consumption(band)
+
+
+def _last_charge(field: str) -> Callable[[MetricsRuntime, datetime], StateType]:
+    def value(metrics: MetricsRuntime, _now: datetime) -> StateType:
+        session = metrics.summary.last_session
+        if session is None:
+            return None
+        raw = session.get(field)
+        return raw.lower() if isinstance(raw, str) else raw
+
+    return value
+
+
+_CONSUMPTION: dict[str, Any] = {
+    "device_class": SensorDeviceClass.ENERGY_DISTANCE,
+    "native_unit_of_measurement": UnitOfEnergyDistance.KILO_WATT_HOUR_PER_100_KM,
+    "state_class": SensorStateClass.MEASUREMENT,
+    "suggested_display_precision": 1,
+}
+_TOTAL_ENERGY: dict[str, Any] = {
+    "device_class": SensorDeviceClass.ENERGY,
+    "native_unit_of_measurement": UnitOfEnergy.KILO_WATT_HOUR,
+    "suggested_display_precision": 1,
+}
+
+METRIC_SENSORS: tuple[EudaMetricDescription, ...] = (
+    # Energy, for the Energy dashboard. Live only: imported history goes into
+    # their statistics instead, so it does not show up as one huge charge.
+    EudaMetricDescription(
+        key="energy_charged",
+        translation_key="energy_charged",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value=lambda m, _now: round(m.live.charged_kwh, 3),
+        **_TOTAL_ENERGY,
+    ),
+    EudaMetricDescription(
+        key="energy_used",
+        translation_key="energy_used",
+        # Net of regenerated energy, so it can go down a little.
+        state_class=SensorStateClass.TOTAL,
+        value=lambda m, _now: round(m.live.used_kwh, 3),
+        **_TOTAL_ENERGY,
+    ),
+    EudaMetricDescription(
+        key="energy_used_parked",
+        translation_key="energy_used_parked",
+        state_class=SensorStateClass.TOTAL,
+        value=lambda m, _now: round(m.live.parked_kwh, 3),
+        **_TOTAL_ENERGY,
+    ),
+    EudaMetricDescription(
+        key="charging_sessions",
+        translation_key="charging_sessions",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        value=lambda m, _now: m.live.sessions,
+        # The count itself is live only, like the energy totals; this shows
+        # the whole count, imported history included.
+        attributes=lambda m: {"including_history": m.summary.sessions},
+    ),
+    # Consumption per calendar week and month.
+    EudaMetricDescription(
+        key="consumption_this_week",
+        translation_key="consumption_this_week",
+        value=_week(0),
+        **_CONSUMPTION,
+    ),
+    EudaMetricDescription(
+        key="consumption_last_week",
+        translation_key="consumption_last_week",
+        value=_week(1),
+        attributes=lambda m: {"weeks": m.summary.table(m.summary.weeks, 26)},
+        **_CONSUMPTION,
+    ),
+    EudaMetricDescription(
+        key="consumption_this_month",
+        translation_key="consumption_this_month",
+        value=_month(0),
+        **_CONSUMPTION,
+    ),
+    EudaMetricDescription(
+        key="consumption_last_month",
+        translation_key="consumption_last_month",
+        value=_month(1),
+        attributes=lambda m: {"months": m.summary.table(m.summary.months, 24)},
+        **_CONSUMPTION,
+    ),
+    # Consumption while driving, by outside temperature.
+    *(
+        EudaMetricDescription(
+            key=f"consumption_{band}",
+            translation_key=f"consumption_{band}",
+            value=_band(band),
+            **_CONSUMPTION,
+        )
+        for band in ("below_0", "0_to_10", "10_to_20", "above_20")
+    ),
+    # Battery health.
+    EudaMetricDescription(
+        key="battery_capacity",
+        translation_key="battery_capacity",
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        value=lambda m, _now: m.summary.capacity,
+        attributes=lambda m: {"months": m.summary.capacity_by_month},
+    ),
+    # Charging.
+    EudaMetricDescription(
+        key="last_charge_energy",
+        translation_key="last_charge_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        suggested_display_precision=1,
+        value=_last_charge("energy"),
+        attributes=lambda m: {
+            key: (m.summary.last_session or {}).get(key)
+            for key in ("start", "end", "soc_start", "soc_end")
+        },
+    ),
+    EudaMetricDescription(
+        key="last_charge_average_power",
+        translation_key="last_charge_average_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        suggested_display_precision=1,
+        value=_last_charge("average_power"),
+    ),
+    EudaMetricDescription(
+        key="last_charge_peak_power",
+        translation_key="last_charge_peak_power",
+        device_class=SensorDeviceClass.POWER,
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        suggested_display_precision=1,
+        value=_last_charge("peak_power"),
+    ),
+    EudaMetricDescription(
+        key="last_charge_type",
+        translation_key="last_charge_type",
+        device_class=SensorDeviceClass.ENUM,
+        options=["ac", "dc"],
+        value=_last_charge("type"),
+    ),
+    EudaMetricDescription(
+        key="dc_share",
+        translation_key="dc_share",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        value=lambda m, _now: m.summary.dc_share(),
+    ),
+)
+
+
+class EudaMetricSensor(EudaEntity, SensorEntity):
+    """A figure calculated from the vehicle's readings over time."""
+
+    entity_description: EudaMetricDescription
+
+    def __init__(
+        self,
+        coordinator: EudaCoordinator,
+        metrics: MetricsRuntime,
+        description: EudaMetricDescription,
+    ) -> None:
+        """Initialise the sensor."""
+        super().__init__(coordinator, description.key)
+        self.entity_description = description
+        self._metrics = metrics
+        self._update_state()
+
+    def _update_state(self) -> None:
+        description = self.entity_description
+        self._attr_native_value = description.value(self._metrics, dt_util.now())
+        if description.attributes is not None:
+            self._attr_extra_state_attributes = description.attributes(self._metrics)
+
+    @property
+    def available(self) -> bool:
+        """Figures stay available through a failed update of the feed."""
+        return True
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        self._update_state()
+        super()._handle_coordinator_update()
