@@ -19,17 +19,38 @@ from .coordinator import EudaConfigEntry
 
 TO_REDACT = {CONF_EMAIL, CONF_PASSWORD, CONF_VIN, CONF_IDENTIFIER, CONF_NICKNAME}
 
-#: Name segments of fields whose values identify or locate the vehicle.
-#: Matched against whole segments, so ``drivingenvironment`` is not a VIN.
+#: Name segments of fields whose values identify the owner, or identify or
+#: locate the vehicle. Matched against whole segments, so
+#: ``drivingenvironment`` is not a VIN.
 _SENSITIVE_SEGMENTS = frozenset(
-    {"vin", "latitude", "longitude", "lat", "lon", "gps", "coordinates"}
+    {
+        "vin",
+        "user",
+        "latitude",
+        "longitude",
+        "lat",
+        "lon",
+        "gps",
+        "geo",
+        "coordinates",
+        "location",
+    }
 )
-_SEGMENT_RE = re.compile(r"[^a-z0-9]+")
+#: Name segments that may hold coordinates, but mostly hold the position of a
+#: window, the hood or the sunroof. Those are a plain number, so a value under
+#: such a name is only kept when it is one.
+_POSITION_SEGMENTS = frozenset({"position", "pos"})
+#: Splits names at separators and at camelCase humps, so ``userId`` gives
+#: ``user`` and ``id``.
+_SEGMENT_RE = re.compile(r"[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])")
+_NUMBER_RE = re.compile(r"\s*-?\d+(\.\d+)?\s*%?\s*")
 
 
 def _is_sensitive(name: str, raw: str, vin: str) -> bool:
-    segments = set(_SEGMENT_RE.split(name.lower()))
-    return bool(segments & _SENSITIVE_SEGMENTS) or (bool(vin) and vin in raw)
+    segments = {segment.lower() for segment in _SEGMENT_RE.split(name)}
+    if segments & _SENSITIVE_SEGMENTS or (bool(vin) and vin in raw):
+        return True
+    return bool(segments & _POSITION_SEGMENTS) and not _NUMBER_RE.fullmatch(raw)
 
 
 async def async_get_config_entry_diagnostics(

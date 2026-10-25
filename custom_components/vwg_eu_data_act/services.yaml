@@ -1,0 +1,12 @@
+import_history:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: vwg_eu_data_act
+    path:
+      required: true
+      example: /media/export.json
+      selector:
+        text:

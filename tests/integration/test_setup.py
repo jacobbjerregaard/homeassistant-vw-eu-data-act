@@ -192,6 +192,12 @@ async def test_diagnostics_redact_by_name_segment_and_vin(hass, client, config_e
                     "value": "21",
                 },
                 {"key": "5", "dataFieldName": "state_of_charge", "value": "25"},
+                {"key": "6", "dataFieldName": "user_id", "value": "u-123"},
+                {"key": "7", "dataFieldName": "profile.userId", "value": "u-123"},
+                {"key": "8", "dataFieldName": "parking_location", "value": "x"},
+                {"key": "9", "dataFieldName": "parkingPosition", "value": "55.6,12.5"},
+                {"key": "10", "dataFieldName": "position_of_hood", "value": "0"},
+                {"key": "11", "dataFieldName": "max_number_users", "value": "4"},
             ],
         }
     )
@@ -204,7 +210,14 @@ async def test_diagnostics_redact_by_name_segment_and_vin(hass, client, config_e
     assert values["note"] == "**REDACTED**"
     assert values["cso_v1_drivingenvironment_outdoorTemperature"] == "21"
     assert values["state_of_charge"] == "25"
+    assert values["user_id"] == "**REDACTED**"
+    assert values["profile.userId"] == "**REDACTED**"
+    assert values["parking_location"] == "**REDACTED**"
+    assert values["parkingPosition"] == "**REDACTED**"
+    assert values["position_of_hood"] == "0"
+    assert values["max_number_users"] == "4"
     assert VIN not in str(result)
+    assert "u-123" not in str(result)
 
 
 def _enable(hass, config_entry, key):
